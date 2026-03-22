@@ -21,9 +21,7 @@ jobs:
   test:
     name: 1 - Test
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'test')
+    if: github.event_name == 'pull_request' || github.event.inputs.action == 'test'
     steps:
       - uses: actions/checkout@v4
       - name: Run test
@@ -32,9 +30,7 @@ jobs:
   deploy-dev:
     name: 2 - Build and Push Image
     runs-on: ubuntu-latest
-    if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'build-and-push')
+    if: github.event_name == 'push' || github.event.inputs.action == 'build-and-push'
     steps:
       - uses: actions/checkout@v4
 
@@ -50,8 +46,7 @@ jobs:
   deploy-prod:
     name: 3 - Deploy to OpenShift
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'deploy-to-openshift'
+    if: github.event.inputs.action == 'deploy-to-openshift'
     environment: production
     steps:
 
@@ -79,7 +74,6 @@ jobs:
 
       - name: Wait for full cleanup
         run: |
-          echo "Waiting for all pods to terminate..."
           oc wait --for=delete pod -l app=nginx-app --timeout=60s || echo "No pods to wait for"
           sleep 5
           echo "All clear"
@@ -109,23 +103,3 @@ jobs:
           echo "Your app is live at:"
           echo "http://$(oc get route nginx-app -o jsonpath='{.spec.host}')"
           echo "================================="
-```
-
----
-
-**How it works now:**
-
-Go to **Actions → My First Pipeline → Run workflow** — you'll see a dropdown asking you to pick:
-
-| Option | What runs |
-|---|---|
-| `test` | runs hello.sh only |
-| `build-and-push` | builds Dockerfile → pushes to Docker Hub |
-| `deploy-to-openshift` | cleans old resources → deploys fresh pod → shows URL |
-
----
-
-**The order to always follow:**
-```
-1. Pick "build-and-push" first  →  image lands on Docker Hub
-2. Pick "deploy-to-openshift"   →  OpenShift pulls that image and runs it
