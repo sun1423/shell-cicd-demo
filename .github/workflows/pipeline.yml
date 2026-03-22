@@ -74,10 +74,9 @@ jobs:
       - name: Set namespace
         run: oc project ${{ secrets.OPENSHIFT_NAMESPACE }}
 
-      - name: Delete everything old
+      - name: Delete old resources
         run: |
-          echo "--- Cleaning all old resources ---"
-          oc delete all -l app=nginx-app --ignore-not-found=true
+          echo "--- Cleaning specific old resources ---"
           oc delete deployment nginx-app --ignore-not-found=true
           oc delete svc nginx-app --ignore-not-found=true
           oc delete route nginx-app --ignore-not-found=true
