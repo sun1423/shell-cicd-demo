@@ -19,13 +19,20 @@ jobs:
         run: bash scripts/hello.sh test
 
   deploy-dev:
-    name: 2 - Auto Deploy to Dev (echo only)
+    name: 2 - Build and Push Image
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-      - name: Simulate dev deploy
-        run: bash scripts/hello.sh dev
+
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build Docker image
+        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/movies:latest .
+
+      - name: Push image to Docker Hub
+        run: docker push ${{ secrets.DOCKER_USERNAME }}/movies:latest
 
   deploy-prod:
     name: 3 - Manual Deploy to OpenShift
@@ -33,7 +40,6 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     environment: production
     steps:
-      - uses: actions/checkout@v4
 
       - name: Install oc CLI
         run: |
@@ -47,21 +53,27 @@ jobs:
       - name: Set namespace
         run: oc project ${{ secrets.OPENSHIFT_NAMESPACE }}
 
-      - name: Clean up old resources
+      - name: Delete everything old
         run: |
-          echo "Deleting old deployment, service and route if they exist..."
+          echo "--- Cleaning all old resources ---"
           oc delete deployment nginx-app --ignore-not-found=true
           oc delete svc nginx-app --ignore-not-found=true
           oc delete route nginx-app --ignore-not-found=true
-          echo "Cleanup done"
+          oc delete replicaset -l app=nginx-app --ignore-not-found=true
+          oc delete pod -l app=nginx-app --ignore-not-found=true
+          echo "--- Cleanup done ---"
 
-      - name: Wait for cleanup
-        run: sleep 10
-
-      - name: Fresh deployment
+      - name: Wait for full cleanup
         run: |
-          echo "Creating fresh deployment..."
-          oc create deployment nginx-app --image=docker.io/bitnami/nginx:latest
+          echo "Waiting for all pods to terminate..."
+          oc wait --for=delete pod -l app=nginx-app --timeout=60s || echo "No pods to wait for"
+          sleep 5
+          echo "All clear"
+
+      - name: Pull and deploy image from Docker Hub
+        run: |
+          echo "Deploying docker.io/${{ secrets.DOCKER_USERNAME }}/movies:latest"
+          oc create deployment nginx-app --image=docker.io/${{ secrets.DOCKER_USERNAME }}/movies:latest
           oc expose deployment nginx-app --port=8080
 
       - name: Wait for rollout
@@ -70,7 +82,16 @@ jobs:
       - name: Expose route
         run: oc expose svc/nginx-app || echo "Route already exists"
 
+      - name: Verify pod is running
+        run: |
+          echo "--- Pod status ---"
+          oc get pods -l app=nginx-app
+          echo "--- Deployment status ---"
+          oc get deployment nginx-app
+
       - name: Show app URL
         run: |
+          echo "================================="
           echo "Your app is live at:"
-          oc get route nginx-app -o jsonpath='{.spec.host}'
+          echo "http://$(oc get route nginx-app -o jsonpath='{.spec.host}')"
+          echo "================================="
