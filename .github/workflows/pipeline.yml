@@ -1,0 +1,27 @@
+name: My First Pipeline
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+
+  test:
+    name: Run Script (Test)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run hello script
+        run: bash scripts/hello.sh dev
+
+  deploy:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy
+        run: bash scripts/hello.sh production
