@@ -58,16 +58,17 @@ jobs:
         run: |
           if oc get deployment nginx-app 2>/dev/null; then
             echo "Deployment exists — updating image"
-            oc set image deployment/nginx-app nginx-openshift=docker.io/${{ secrets.DOCKER_USERNAME }}/nginx-openshift:latest
+            oc set image deployment/nginx-app nginx-app=docker.io/${{ secrets.DOCKER_USERNAME }}/nginx-openshift:latest
           else
             echo "Fresh deployment"
-            oc new-app --docker-image=docker.io/${{ secrets.DOCKER_USERNAME }}/nginx-openshift:latest --name=nginx-app
+            oc create deployment nginx-app --image=docker.io/${{ secrets.DOCKER_USERNAME }}/nginx-openshift:latest
+            oc expose deployment nginx-app --port=8080
           fi
 
       - name: Wait for rollout
         run: oc rollout status deployment/nginx-app --timeout=120s
 
-      - name: Expose the service
+      - name: Expose route
         run: |
           oc expose svc/nginx-app --port=8080 || echo "Route already exists"
 
