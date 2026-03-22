@@ -16,6 +16,9 @@ on:
           - build-and-push
           - deploy-to-openshift
 
+env:
+  IMAGE: ${{ secrets.DOCKER_USERNAME }}/movies:latest
+
 jobs:
 
   test:
@@ -24,97 +27,48 @@ jobs:
     if: github.event_name == 'pull_request' || github.event.inputs.action == 'test'
     steps:
       - uses: actions/checkout@v4
-      - name: Run test
-        run: bash scripts/hello.sh test
+      - run: bash scripts/hello.sh test
 
-  deploy-dev:
-    name: 2 - Build and Push Image
+  build:
+    name: 2 - Build and Push
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event.inputs.action == 'build-and-push'
     steps:
       - uses: actions/checkout@v4
+      - run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+      - run: docker build --no-cache -t ${{ env.IMAGE }} .
+      - run: docker push ${{ env.IMAGE }}
 
-      - name: Log in to Docker Hub
-        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
-      - name: Build Docker image with no cache
-        run: docker build --no-cache -t ${{ secrets.DOCKER_USERNAME }}/movies:latest .
-
-      - name: Push image to Docker Hub
-        run: docker push ${{ secrets.DOCKER_USERNAME }}/movies:latest
-
-      - name: Confirm image pushed
-        run: echo "Image pushed successfully"
-
-  deploy-prod:
+  deploy:
     name: 3 - Deploy to OpenShift
     runs-on: ubuntu-latest
     if: github.event.inputs.action == 'deploy-to-openshift'
     environment: production
     steps:
-
-      - name: Install oc CLI
+      - name: Install oc
         run: |
           curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz
           tar -xzf openshift-client-linux.tar.gz
           sudo mv oc /usr/local/bin/
 
-      - name: Login to OpenShift
+      - name: Login
         run: oc login --token=${{ secrets.OPENSHIFT_TOKEN }} --server=${{ secrets.OPENSHIFT_SERVER }} --insecure-skip-tls-verify=true
 
-      - name: Set namespace
-        run: oc project ${{ secrets.OPENSHIFT_NAMESPACE }}
-
-      - name: Delete old resources
+      - name: Cleanup
         run: |
-          echo "--- Cleaning old resources ---"
-          oc delete deployment myapp --ignore-not-found=true
-          oc delete svc myapp --ignore-not-found=true
-          oc delete route myapp --ignore-not-found=true
-          oc delete replicaset -l app=myapp --ignore-not-found=true
-          oc delete pod -l app=myapp --ignore-not-found=true
-          echo "--- Cleanup done ---"
-
-      - name: Wait for full cleanup
-        run: |
-          oc wait --for=delete pod -l app=myapp --timeout=60s || echo "No pods to wait for"
-          sleep 10
-          echo "All clear"
-
-      - name: Clear OpenShift image cache
-        run: |
-          echo "--- Clearing image cache ---"
+          oc project ${{ secrets.OPENSHIFT_NAMESPACE }}
+          oc delete deployment,svc,route,replicaset,pod -l app=myapp --ignore-not-found=true
           oc delete imagestream myapp --ignore-not-found=true
-          echo "--- Cache cleared ---"
+          oc wait --for=delete pod -l app=myapp --timeout=60s || true
+          sleep 10
 
-      - name: Fresh deployment
+      - name: Deploy
         run: |
-          echo "Starting fresh deployment..."
-          oc create deployment myapp --image=docker.io/${{ secrets.DOCKER_USERNAME }}/movies:latest
-
-      - name: Set image pull policy to Always
-        run: |
+          oc create deployment myapp --image=docker.io/${{ env.IMAGE }}
           oc patch deployment myapp -p '{"spec":{"template":{"spec":{"containers":[{"name":"movies","imagePullPolicy":"Always"}]}}}}'
+          oc expose deployment myapp --port=8080
+          oc rollout status deployment/myapp --timeout=120s
+          oc expose svc/myapp || true
 
-      - name: Expose service
-        run: oc expose deployment myapp --port=8080
-
-      - name: Wait for rollout
-        run: oc rollout status deployment/myapp --timeout=120s
-
-      - name: Expose route
-        run: oc expose svc/myapp || echo "Route already exists"
-
-      - name: Verify pod is running
-        run: |
-          echo "--- Pod status ---"
-          oc get pods -l app=myapp
-          echo "--- Deployment status ---"
-          oc get deployment myapp
-
-      - name: Show app URL
-        run: |
-          echo "================================="
-          echo "Your app is live at:"
-          oc get route myapp -o jsonpath='{.spec.host}'
-          echo "================================="
+      - name: URL
+        run: oc get route myapp -o jsonpath='{.spec.host}'
