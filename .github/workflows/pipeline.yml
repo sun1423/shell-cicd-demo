@@ -74,5 +74,4 @@ jobs:
       - name: Show app URL
         run: |
           echo "Your app is live at:"
-          oc get route nginx-app -o jsonpath='{.spec.host}'pp URL
-        run: oc get route nginx-app -o jsonpath='{.spec.host}'
+          oc get route nginx-app -o jsonpath='{.spec.host}'
