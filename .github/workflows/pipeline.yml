@@ -44,10 +44,7 @@ jobs:
         run: docker push ${{ secrets.DOCKER_USERNAME }}/movies:latest
 
       - name: Confirm image pushed
-        run: |
-          echo "================================="
-          echo "Image pushed: docker.io/${{ secrets.DOCKER_USERNAME }}/movies:latest"
-          echo "================================="
+        run: echo "Image pushed successfully"
 
   deploy-prod:
     name: 3 - Deploy to OpenShift
@@ -78,18 +75,4 @@ jobs:
           oc delete pod -l app=myapp --ignore-not-found=true
           echo "--- Cleanup done ---"
 
-      - name: Wait for full cleanup
-        run: |
-          oc wait --for=delete pod -l app=myapp --timeout=60s || echo "No pods to wait for"
-          sleep 10
-          echo "All clear"
-
-      - name: Clear OpenShift image cache
-        run: |
-          echo "--- Clearing image cache ---"
-          oc delete imagestream myapp --ignore-not-found=true
-          echo "--- Cache cleared ---"
-
-      - name: Fresh deployment
-        run: |
-          echo "Deploying docker.io/
+      - nam
