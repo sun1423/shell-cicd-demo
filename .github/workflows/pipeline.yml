@@ -5,6 +5,12 @@ on:
     branches: [ main ]
   push:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deploy to which environment?'
+        required: true
+        default: 'production'
 
 jobs:
 
@@ -17,11 +23,21 @@ jobs:
       - name: Run hello script
         run: bash scripts/hello.sh dev
 
-  deploy:
+  deploy-dev:
     name: Deploy to Dev
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
-      - name: Deploy
+      - name: Deploy to dev
+        run: bash scripts/hello.sh dev
+
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to production
         run: bash scripts/hello.sh production
