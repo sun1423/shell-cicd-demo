@@ -6,13 +6,24 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'What do you want to do?'
+        required: true
+        type: choice
+        options:
+          - test
+          - build-and-push
+          - deploy-to-openshift
 
 jobs:
 
   test:
-    name: 1 - Test on PR
+    name: 1 - Test
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'test')
     steps:
       - uses: actions/checkout@v4
       - name: Run test
@@ -21,7 +32,9 @@ jobs:
   deploy-dev:
     name: 2 - Build and Push Image
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'build-and-push')
     steps:
       - uses: actions/checkout@v4
 
@@ -35,9 +48,10 @@ jobs:
         run: docker push ${{ secrets.DOCKER_USERNAME }}/movies:latest
 
   deploy-prod:
-    name: 3 - Manual Deploy to OpenShift
+    name: 3 - Deploy to OpenShift
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    if: |
+      github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'deploy-to-openshift'
     environment: production
     steps:
 
@@ -95,3 +109,23 @@ jobs:
           echo "Your app is live at:"
           echo "http://$(oc get route nginx-app -o jsonpath='{.spec.host}')"
           echo "================================="
+```
+
+---
+
+**How it works now:**
+
+Go to **Actions → My First Pipeline → Run workflow** — you'll see a dropdown asking you to pick:
+
+| Option | What runs |
+|---|---|
+| `test` | runs hello.sh only |
+| `build-and-push` | builds Dockerfile → pushes to Docker Hub |
+| `deploy-to-openshift` | cleans old resources → deploys fresh pod → shows URL |
+
+---
+
+**The order to always follow:**
+```
+1. Pick "build-and-push" first  →  image lands on Docker Hub
+2. Pick "deploy-to-openshift"   →  OpenShift pulls that image and runs it
