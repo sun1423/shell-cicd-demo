@@ -75,4 +75,46 @@ jobs:
           oc delete pod -l app=myapp --ignore-not-found=true
           echo "--- Cleanup done ---"
 
-      - nam
+      - name: Wait for full cleanup
+        run: |
+          oc wait --for=delete pod -l app=myapp --timeout=60s || echo "No pods to wait for"
+          sleep 10
+          echo "All clear"
+
+      - name: Clear OpenShift image cache
+        run: |
+          echo "--- Clearing image cache ---"
+          oc delete imagestream myapp --ignore-not-found=true
+          echo "--- Cache cleared ---"
+
+      - name: Fresh deployment
+        run: |
+          echo "Starting fresh deployment..."
+          oc create deployment myapp --image=docker.io/${{ secrets.DOCKER_USERNAME }}/movies:latest
+
+      - name: Set image pull policy to Always
+        run: |
+          oc patch deployment myapp -p '{"spec":{"template":{"spec":{"containers":[{"name":"movies","imagePullPolicy":"Always"}]}}}}'
+
+      - name: Expose service
+        run: oc expose deployment myapp --port=8080
+
+      - name: Wait for rollout
+        run: oc rollout status deployment/myapp --timeout=120s
+
+      - name: Expose route
+        run: oc expose svc/myapp || echo "Route already exists"
+
+      - name: Verify pod is running
+        run: |
+          echo "--- Pod status ---"
+          oc get pods -l app=myapp
+          echo "--- Deployment status ---"
+          oc get deployment myapp
+
+      - name: Show app URL
+        run: |
+          echo "================================="
+          echo "Your app is live at:"
+          oc get route myapp -o jsonpath='{.spec.host}'
+          echo "================================="
