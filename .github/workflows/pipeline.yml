@@ -6,38 +6,33 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Deploy to which environment?'
-        required: true
-        default: 'production'
 
 jobs:
 
   test:
-    name: Run Script (Test)
+    name: 1 - Test on PR
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
-      - name: Run hello script
-        run: bash scripts/hello.sh dev
+      - name: Run test
+        run: bash scripts/hello.sh test
 
   deploy-dev:
-    name: Deploy to Dev
+    name: 2 - Auto Deploy to Dev
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-      - name: Deploy to dev
+      - name: Deploy dev
         run: bash scripts/hello.sh dev
 
   deploy-prod:
-    name: Deploy to Production
+    name: 3 - Manual Deploy to Prod
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - name: Deploy to production
+      - name: Deploy prod
         run: bash scripts/hello.sh production
