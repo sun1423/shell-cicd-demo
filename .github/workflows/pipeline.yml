@@ -70,48 +70,48 @@ jobs:
 
       - name: Delete old resources
         run: |
-          echo "--- Cleaning specific old resources ---"
-          oc delete deployment nginx-app --ignore-not-found=true
-          oc delete svc nginx-app --ignore-not-found=true
-          oc delete route nginx-app --ignore-not-found=true
-          oc delete replicaset -l app=nginx-app --ignore-not-found=true
-          oc delete pod -l app=nginx-app --ignore-not-found=true
+          echo "--- Cleaning old resources ---"
+          oc delete deployment myapp --ignore-not-found=true
+          oc delete svc myapp --ignore-not-found=true
+          oc delete route myapp --ignore-not-found=true
+          oc delete replicaset -l app=myapp --ignore-not-found=true
+          oc delete pod -l app=myapp --ignore-not-found=true
           echo "--- Cleanup done ---"
 
       - name: Wait for full cleanup
         run: |
-          oc wait --for=delete pod -l app=nginx-app --timeout=60s || echo "No pods to wait for"
+          oc wait --for=delete pod -l app=myapp --timeout=60s || echo "No pods to wait for"
           sleep 10
           echo "All clear"
 
       - name: Fresh deployment
         run: |
           echo "Deploying docker.io/${{ secrets.DOCKER_USERNAME }}/movies:latest"
-          oc create deployment nginx-app --image=docker.io/${{ secrets.DOCKER_USERNAME }}/movies:latest
+          oc create deployment myapp --image=docker.io/${{ secrets.DOCKER_USERNAME }}/movies:latest
 
       - name: Set image pull policy to Always
         run: |
-          oc patch deployment nginx-app -p '{"spec":{"template":{"spec":{"containers":[{"name":"movies","imagePullPolicy":"Always"}]}}}}'
+          oc patch deployment myapp -p '{"spec":{"template":{"spec":{"containers":[{"name":"movies","imagePullPolicy":"Always"}]}}}}'
 
       - name: Expose service
-        run: oc expose deployment nginx-app --port=8080
+        run: oc expose deployment myapp --port=8080
 
       - name: Wait for rollout
-        run: oc rollout status deployment/nginx-app --timeout=120s
+        run: oc rollout status deployment/myapp --timeout=120s
 
       - name: Expose route
-        run: oc expose svc/nginx-app || echo "Route already exists"
+        run: oc expose svc/myapp || echo "Route already exists"
 
       - name: Verify pod is running
         run: |
           echo "--- Pod status ---"
-          oc get pods -l app=nginx-app
+          oc get pods -l app=myapp
           echo "--- Deployment status ---"
-          oc get deployment nginx-app
+          oc get deployment myapp
 
       - name: Show app URL
         run: |
           echo "================================="
           echo "Your app is live at:"
-          echo "http://$(oc get route nginx-app -o jsonpath='{.spec.host}')"
+          echo "http://$(oc get route myapp -o jsonpath='{.spec.host}')"
           echo "================================="
