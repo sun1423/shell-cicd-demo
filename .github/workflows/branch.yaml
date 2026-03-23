@@ -15,8 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Inject API key
-        run: sed -i 's/TMDB_API_KEY_PLACEHOLDER/${{ secrets.TMDB_API_KEY }}/g' index.html
+    
       - name: Block main branch
         run: |
           if [ "${{ github.event.inputs.branch }}" == "main" ]; then
@@ -31,7 +30,13 @@ jobs:
 
       - name: Login to Docker Hub
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
+      - name: Inject API key
+        run: |
+          echo "Files in current directory:"
+          ls -la
+          sed -i 's/TMDB_API_KEY_PLACEHOLDER/${{ secrets.TMDB_API_KEY }}/g' index.html
+          echo "Injection done"
+          
       - name: Build and push
         run: |
           docker build --no-cache -t ${{ secrets.DOCKER_USERNAME }}/movies:${{ github.event.inputs.branch }} .
