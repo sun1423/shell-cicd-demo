@@ -1,0 +1,75 @@
+name: Branch Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build and deploy'
+        required: true
+        type: choice
+        options:
+          - myapp18
+
+env:
+  IMAGE: ${{ secrets.DOCKER_USERNAME }}/movies:myapp18
+  APP: myapp2
+
+jobs:
+
+  build-and-deploy:
+    name: Build Push Deploy
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build and push
+        run: |
+          docker build --no-cache -t ${{ env.IMAGE }} .
+          docker push ${{ env.IMAGE }}
+
+      - name: Cache oc CLI
+        id: cache-oc
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/oc
+          key: oc-cli-stable
+
+      - name: Install oc if not cached
+        if: steps.cache-oc.outputs.cache-hit != 'true'
+        run: |
+          curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz
+          tar -xzf openshift-client-linux.tar.gz
+          sudo mv oc /usr/local/bin/
+
+      - name: Login to OpenShift
+        run: oc login --token=${{ secrets.OPENSHIFT_TOKEN }} --server=${{ secrets.OPENSHIFT_SERVER }} --insecure-skip-tls-verify=true
+
+      - name: Cleanup
+        run: |
+          oc project ${{ secrets.OPENSHIFT_NAMESPACE }}
+          oc delete deployment,svc,route -l app=${{ env.APP }} --ignore-not-found=true
+          oc delete imagestream ${{ env.APP }} --ignore-not-found=true
+          oc wait --for=delete pod -l app=${{ env.APP }} --timeout=60s || true
+          sleep 5
+
+      - name: Deploy
+        run: |
+          oc create deployment ${{ env.APP }} --image=docker.io/${{ env.IMAGE }}
+          oc patch deployment ${{ env.APP }} -p '{"spec":{"template":{"spec":{"containers":[{"name":"movies","imagePullPolicy":"Always"}]}}}}'
+          oc expose deployment ${{ env.APP }} --port=8080
+          oc rollout status deployment/${{ env.APP }} --timeout=120s
+          oc expose svc/${{ env.APP }} || true
+
+      - name: Show URL
+        run: |
+          URL=$(oc get route ${{ env.APP }} -o jsonpath='{.spec.host}')
+          echo "================================="
+          echo "http://$URL"
+          echo "================================="
