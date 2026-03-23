@@ -1,0 +1,73 @@
+name: Branch Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch name to build and deploy'
+        required: true
+        default: 'myapp18'
+
+env:
+  IMAGE: ${{ secrets.DOCKER_USERNAME }}/movies:${{ github.event.inputs.branch }}
+  APP: ${{ github.event.inputs.branch }}
+
+jobs:
+
+  build-and-deploy:
+    name: Build Push Deploy
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build and push
+        run: |
+          docker build --no-cache -t ${{ secrets.DOCKER_USERNAME }}/movies:${{ github.event.inputs.branch }} .
+          docker push ${{ secrets.DOCKER_USERNAME }}/movies:${{ github.event.inputs.branch }}
+
+      - name: Cache oc CLI
+        id: cache-oc
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/oc
+          key: oc-cli-stable
+
+      - name: Install oc if not cached
+        if: steps.cache-oc.outputs.cache-hit != 'true'
+        run: |
+          curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz
+          tar -xzf openshift-client-linux.tar.gz
+          sudo mv oc /usr/local/bin/
+
+      - name: Login to OpenShift
+        run: oc login --token=${{ secrets.OPENSHIFT_TOKEN }} --server=${{ secrets.OPENSHIFT_SERVER }} --insecure-skip-tls-verify=true
+
+      - name: Cleanup
+        run: |
+          oc project ${{ secrets.OPENSHIFT_NAMESPACE }}
+          oc delete deployment,svc,route -l app=${{ github.event.inputs.branch }} --ignore-not-found=true
+          oc delete imagestream ${{ github.event.inputs.branch }} --ignore-not-found=true
+          oc wait --for=delete pod -l app=${{ github.event.inputs.branch }} --timeout=60s || true
+          sleep 5
+
+      - name: Deploy
+        run: |
+          oc create deployment ${{ github.event.inputs.branch }} --image=docker.io/${{ secrets.DOCKER_USERNAME }}/movies:${{ github.event.inputs.branch }}
+          oc patch deployment ${{ github.event.inputs.branch }} -p '{"spec":{"template":{"spec":{"containers":[{"name":"movies","imagePullPolicy":"Always"}]}}}}'
+          oc expose deployment ${{ github.event.inputs.branch }} --port=8080
+          oc rollout status deployment/${{ github.event.inputs.branch }} --timeout=120s
+          oc expose svc/${{ github.event.inputs.branch }} || true
+
+      - name: Show URL
+        run: |
+          URL=$(oc get route ${{ github.event.inputs.branch }} -o jsonpath='{.spec.host}')
+          echo "================================="
+          echo "http://$URL"
+          echo "================================="
