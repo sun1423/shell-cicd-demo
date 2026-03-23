@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>My TMDb Movies & TV Feed (2023+ with Rating ≥7)</title>
+  <title>My TMDb Movies & TV Feed (2018+ with Rating ≥7)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -40,13 +40,13 @@
   </style>
 </head>
 <body>
-  <h1>🎬 TMDb Movies & TV Shows – Since 2023, Rating ≥ 7</h1>
+  <h1>🎬 TMDb Movies & TV Shows – Since 2018, Rating ≥ 7</h1>
   <div id="feed">Loading...</div>
 
   <script>
     const apiKey = '437b12ebb59b34d5038559933033de78'; // Your TMDb API key
-    const movieUrl = `https://api.themoviedb.org/3/discover/movie?primary_release_date.gte=2023-01-01&sort_by=popularity.desc&vote_average.gte=7&api_key=${apiKey}`;
-    const tvUrl = `https://api.themoviedb.org/3/discover/tv?first_air_date.gte=2023-01-01&sort_by=popularity.desc&vote_average.gte=7&api_key=${apiKey}`;
+    const movieUrl = `https://api.themoviedb.org/3/discover/movie?primary_release_date.gte=2018-01-01&sort_by=popularity.desc&vote_average.gte=7&api_key=${apiKey}`;
+    const tvUrl = `https://api.themoviedb.org/3/discover/tv?first_air_date.gte=2018-01-01&sort_by=popularity.desc&vote_average.gte=7&api_key=${apiKey}`;
 
     async function getFeed() {
       const [movies, tv] = await Promise.all([
@@ -122,8 +122,8 @@ addEventListener('fetch', event => {
 });
 
 async function handleRequest() {
-  const movieResults = await fetchFromTMDb("discover/movie?primary_release_date.gte=2023-01-01&vote_average.gte=7&sort_by=popularity.desc");
-  const tvResults = await fetchFromTMDb("discover/tv?first_air_date.gte=2023-01-01&vote_average.gte=7&sort_by=popularity.desc");
+  const movieResults = await fetchFromTMDb("discover/movie?primary_release_date.gte=2018-01-01&vote_average.gte=7&sort_by=popularity.desc");
+  const tvResults = await fetchFromTMDb("discover/tv?first_air_date.gte=2018-01-01&vote_average.gte=7&sort_by=popularity.desc");
 
   const combined = [...movieResults, ...tvResults].sort((a, b) => {
     const dateA = new Date(a.release_date || a.first_air_date).getTime();
@@ -137,7 +137,7 @@ async function handleRequest() {
     const title = item.title || item.name;
     const overview = item.overview || '';
     const link = `https://www.themoviedb.org/${item.media_type || (item.first_air_date ? 'tv' : 'movie')}/${item.id}`;
-    const pubDate = item.release_date || item.first_air_date || '2023';
+    const pubDate = item.release_date || item.first_air_date || '2018';
     const rating = item.vote_average;
 
     items += `
@@ -152,9 +152,9 @@ async function handleRequest() {
   const rss = `
     <rss version="2.0">
       <channel>
-        <title>TMDb Feed - Movies & TV ≥ 7 (Since 2023)</title>
+        <title>TMDb Feed - Movies & TV ≥ 7 (Since 2018)</title>
         <link>https://www.themoviedb.org</link>
-        <description>Combined movie/TV with rating ≥7 since 2023</description>
+        <description>Combined movie/TV with rating ≥7 since 2018</description>
         ${items}
       </channel>
     </rss>`;
