@@ -15,7 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-
+       - name: Inject API key
+        run: sed -i 's/TMDB_API_KEY_PLACEHOLDER/${{ secrets.TMDB_API_KEY }}/g' index.html
       - name: Block main branch
         run: |
           if [ "${{ github.event.inputs.branch }}" == "main" ]; then
