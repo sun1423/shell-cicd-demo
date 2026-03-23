@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>My TMDb Movies & TV Feed (2023+ with Rating ≥7)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+      background: #f9f9f9;
+    }
+
+    h1 {
+      color: #222;
+      font-size: 1.6em;
+    }
+
+    .item {
+      padding: 1rem;
+      margin-bottom: 1rem;
+      background: #fff;
+      border-left: 4px solid #0074D9;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .rating {
+      font-weight: bold;
+      color: #d35400;
+    }
+
+    .meta {
+      font-size: 0.9em;
+      color: #555;
+    }
+
+    .link {
+      text-decoration: none;
+      color: #0074D9;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎬 TMDb Movies & TV Shows – Since 2023, Rating ≥ 7</h1>
+  <div id="feed">Loading...</div>
+
+  <script>
+    const apiKey = '55555555'; // Your TMDb API key
+    const movieUrl = `https://api.themoviedb.org/3/discover/movie?primary_release_date.gte=2023-01-01&sort_by=popularity.desc&vote_average.gte=7&api_key=${apiKey}`;
+    const tvUrl = `https://api.themoviedb.org/3/discover/tv?first_air_date.gte=2023-01-01&sort_by=popularity.desc&vote_average.gte=7&api_key=${apiKey}`;
+
+    async function getFeed() {
+      const [movies, tv] = await Promise.all([
+        fetch(movieUrl).then(res => res.json()),
+        fetch(tvUrl).then(res => res.json())
+      ]);
+
+      const combined = [...(movies.results || []), ...(tv.results || [])];
+
+      combined.sort((a, b) => {
+        const dateA = new Date(a.first_air_date || a.release_date).getTime();
+        const dateB = new Date(b.first_air_date || b.release_date).getTime();
+        return dateB - dateA;
+      });
+
+      return combined.slice(0, 50); // top 50
+    }
+
+    function renderFeed(data) {
+      const container = document.getElementById('feed');
+      container.innerHTML = '';
+
+      data.forEach(item => {
+        const title = item.title || item.name;
+        const date = item.release_date || item.first_air_date || 'N/A';
+        const rating = item.vote_average?.toFixed(1) || 'N/A';
+        const overview = item.overview || 'No description available.';
+        const type = item.first_air_date ? 'TV Show' : 'Movie';
+        const url = `https://www.themoviedb.org/${type === 'Movie' ? 'movie' : 'tv'}/${item.id}`;
+
+        const html = `
+          <div class="item">
+            <a class="link" href="${url}" target="_blank"><strong>${title}</strong></a>
+            <div class="meta">${type} | Released: ${date} | <span class="rating">⭐ ${rating}</span></div>
+            <p>${overview}</p>
+          </div>
+        `;
+        container.innerHTML += html;
+      });
+    }
+
+    getFeed()
+      .then(renderFeed)
+      .catch(err => {
+        document.getElementById('feed').innerHTML = '<p>Error loading feed. Check your API key or connection.</p>';
+        console.error('Error fetching TMDb data:', err);
+      });
+  </script>
+</body>
+</html>const TMDB_API_KEY = "55555555"; // <== your API key here!
+
+async function fetchFromTMDb(endpoint) {
+  const url = `https://api.themoviedb.org/3/${endpoint}&api_key=${TMDB_API_KEY}`;
+  const res = await fetch(url);
+  const json = await res.json();
+  return json.results || [];
+}
+
+function escapeXml(unsafe) {
+  return unsafe?.replace(/[<>&'"]/g, (c) => {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '\'': return '&apos;';
+      case '"': return '&quot;';
+    }
+  }) || '';
+}
+
+addEventListener('fetch', event => {
+  event.respondWith(handleRequest());
+});
+
+async function handleRequest() {
+  const movieResults = await fetchFromTMDb("discover/movie?primary_release_date.gte=2023-01-01&vote_average.gte=7&sort_by=popularity.desc");
+  const tvResults = await fetchFromTMDb("discover/tv?first_air_date.gte=2023-01-01&vote_average.gte=7&sort_by=popularity.desc");
+
+  const combined = [...movieResults, ...tvResults].sort((a, b) => {
+    const dateA = new Date(a.release_date || a.first_air_date).getTime();
+    const dateB = new Date(b.release_date || b.first_air_date).getTime();
+    return dateB - dateA;
+  }).slice(0, 50); // limit to 50 items
+
+  let items = '';
+
+  for (let item of combined) {
+    const title = item.title || item.name;
+    const overview = item.overview || '';
+    const link = `https://www.themoviedb.org/${item.media_type || (item.first_air_date ? 'tv' : 'movie')}/${item.id}`;
+    const pubDate = item.release_date || item.first_air_date || '2023';
+    const rating = item.vote_average;
+
+    items += `
+      <item>
+        <title>${escapeXml(title)} [${rating}]</title>
+        <description>${escapeXml(overview)}</description>
+        <link>${link}</link>
+        <pubDate>${new Date(pubDate).toUTCString()}</pubDate>
+      </item>`;
+  }
+
+  const rss = `
+    <rss version="2.0">
+      <channel>
+        <title>TMDb Feed - Movies & TV ≥ 7 (Since 2023)</title>
+        <link>https://www.themoviedb.org</link>
+        <description>Combined movie/TV with rating ≥7 since 2023</description>
+        ${items}
+      </channel>
+    </rss>`;
+
+  return new Response(rss, {
+    headers: { 'Content-Type': 'application/rss+xml' }
+  });
+}
